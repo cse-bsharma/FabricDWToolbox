@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fabric DW Query Performance Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20260210L">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='fabric.png') }}" alt="Fabric" class="logo-icon" width="32" height="32">
+                <h1>Fabric DW Query Performance Analyzer</h1>
+            </div>
+            <div class="header-actions">
+                <button id="helpBtn" class="btn-icon" title="Help">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Input Panel -->
+            <section class="input-panel">
+                <div class="panel-header">
+                    <h2>Query Analysis</h2>
+                    <div class="tab-group">
+                        <button class="tab active" data-tab="connection">Live Connection</button>
+                        <button class="tab" data-tab="xml">Upload XML</button>
+                    </div>
+                </div>
+
+                <!-- Connection Tab -->
+                <div class="tab-content active" id="connection-tab">
+                    <form id="queryForm">
+                        <div class="form-section">
+                            <h3>Connection Details</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="server">Server</label>
+                                    <input type="text" id="server" name="server" 
+                                           placeholder="workspace.datawarehouse.fabric.microsoft.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="database">Database</label>
+                                    <input type="text" id="database" name="database" 
+                                           placeholder="MyDataWarehouse" required>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="authMethod">Authentication</label>
+                                <select id="authMethod" name="authMethod">
+                                    <option value="ActiveDirectoryInteractive">Azure AD Interactive (Browser)</option>
+                                    <option value="ActiveDirectoryPassword">Azure AD Password</option>
+                                    <option value="ActiveDirectoryDefault">Azure AD Default (CLI/Managed Identity)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-row credentials-row" id="credentialsRow" style="display: none;">
+                                <div class="form-group">
+                                    <label for="username">Azure AD Username</label>
+                                    <input type="email" id="username" name="username" 
+                                           placeholder="user@domain.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="password">Password</label>
+                                    <input type="password" id="password" name="password">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3>SQL Query</h3>
+                            <div class="form-group">
+                                <textarea id="query" name="query" rows="10" 
+                                          placeholder="SELECT s.SaleID, s.Amount, c.CustomerName
+FROM Sales s
+INNER JOIN Customers c ON s.CustomerID = c.CustomerID
+WHERE s.SaleDate >= '2024-01-01'" required></textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn-primary" id="runBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                Run Query
+                            </button>
+                            <button type="submit" class="btn-secondary" id="analyzeBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.35-4.35"></path>
+                                </svg>
+                                Analyze Plan
+                            </button>
+                            <button type="button" class="btn-secondary" id="clearBtn">Clear</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- XML Upload Tab -->
+                <div class="tab-content" id="xml-tab">
+                    <form id="xmlForm">
+                        <div class="form-section">
+                            <h3>Execution Plan XML</h3>
+                            <div class="upload-area" id="uploadArea">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <p>Drag & drop execution plan XML here<br>or click to browse</p>
+                                <input type="file" id="planFile" accept=".xml,.sqlplan" hidden>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>Or paste XML directly:</label>
+                                <textarea id="planXml" name="planXml" rows="8" 
+                                          placeholder="Paste SHOWPLAN_XML content here..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary" id="analyzeXmlBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.35-4.35"></path>
+                                </svg>
+                                Analyze Plan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Results Panel -->
+            <section class="results-panel" id="resultsPanel">
+                <div class="panel-header">
+                    <div class="results-title">
+                        <img src="{{ url_for('static', filename='synapse_data_warehouse.png') }}" alt="Fabric DW" class="logo-icon" width="28" height="28">
+                        <h2>Analysis Results</h2>
+                    </div>
+                    <button class="btn-icon" id="exportBtn" title="Export JSON" disabled>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Empty State -->
+                <div class="empty-state" id="emptyState">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <p>Enter a query and click Analyze to see recommendations</p>
+                </div>
+
+                <!-- Loading State -->
+                <div class="loading-state" id="loadingState" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing query...</p>
+                </div>
+
+                <!-- Error State -->
+                <div class="error-state" id="errorState" style="display: none;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <h3>Operation Failed</h3>
+                    <p id="errorMessage"></p>
+                    <details id="errorDetails">
+                        <summary>Technical Details</summary>
+                        <pre id="errorTrace"></pre>
+                    </details>
+                </div>
+
+                <!-- Query Results (Run mode) -->
+                <div class="query-results-content" id="queryResultsContent" style="display: none;">
+                    <div class="result-section">
+                        <h3>Query Results</h3>
+                        <div class="query-info">
+                            <div class="info-row">
+                                <span class="info-label">Rows Returned:</span>
+                                <span class="info-value" id="rowCount">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Execution Time:</span>
+                                <span class="info-value" id="executionTime">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="result-section">
+                        <div class="results-table-wrapper">
+                            <table class="results-table" id="resultsTable">
+                                <thead id="resultsTableHead"></thead>
+                                <tbody id="resultsTableBody"></tbody>
+                            </table>
+                        </div>
+                        <p class="has-more-notice" id="hasMoreNotice" style="display: none;">
+                            Showing first <span id="maxRowsShown"></span> rows. More results available.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Results Content -->
+                <div class="results-content" id="resultsContent" style="display: none;">
+                    <!-- Summary Cards -->
+                    <div class="summary-cards">
+                        <div class="summary-card critical">
+                            <span class="count" id="criticalCount">0</span>
+                            <span class="label">Critical</span>
+                        </div>
+                        <div class="summary-card high">
+                            <span class="count" id="highCount">0</span>
+                            <span class="label">High</span>
+                        </div>
+                        <div class="summary-card medium">
+                            <span class="count" id="mediumCount">0</span>
+                            <span class="label">Medium</span>
+                        </div>
+                        <div class="summary-card low">
+                            <span class="count" id="lowCount">0</span>
+                            <span class="label">Low</span>
+                        </div>
+                    </div>
+
+                    <!-- Statement Information -->
+                    <div class="result-section">
+                        <h3>Statement Information</h3>
+                        <div class="query-info">
+                            <div class="info-row">
+                                <span class="info-label">Statement Type:</span>
+                                <span class="info-value" id="statementType">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Estimated Rows:</span>
+                                <span class="info-value" id="estimatedRows">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="result-section" id="recommendationsSection">
+                        <h3>Recommendations</h3>
+                        <div class="recommendations-list" id="recommendationsList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Query History -->
+                    <div class="result-section" id="queryHistorySection" style="display: none;">
+                        <h3>Query History (Last 14 Days) <span class="query-hash-badge" id="queryHashBadge"></span></h3>
+                        
+                        <!-- Execution Time Chart -->
+                        <div class="history-chart-container">
+                            <h4>Execution Time History</h4>
+                            <div class="chart-wrapper">
+                                <canvas id="executionTimeChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Aggregate Statistics Table -->
+                        <div class="history-stats-container">
+                            <h4>Performance Statistics</h4>
+                            <table class="data-table" id="historyStatsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Min</th>
+                                        <th>Max</th>
+                                        <th>Avg</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyStatsBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Information -->
+                    <div class="result-section" id="statisticsSection">
+                        <h3>Statistics Information</h3>
+                        <div class="stats-table-wrapper">
+                            <table class="data-table" id="statisticsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th>Table</th>
+                                        <th>Data Type</th>
+                                        <th>Last Updated</th>
+                                        <th>Table Cardinality</th>
+                                        <th>Actual Rows</th>
+                                        <th>Sample %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="statisticsTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- High-Cost Data Movement Operators -->
+                    <div class="result-section" id="highCostSection">
+                        <h3>
+                            <span class="warning-icon">⚠️</span>
+                            High-Cost Data Movement Operators (>20% of query cost)
+                        </h3>
+                        <div class="operators-table" id="highCostOperatorsTable">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Sort/Order By Operators -->
+                    <div class="result-section" id="sortOperatorsSection">
+                        <h3>Sort/Order By Operators</h3>
+                        <div class="category-table-wrapper">
+                            <table class="data-table" id="sortOperatorsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Logical Op</th>
+                                        <th>Est. Rows</th>
+                                        <th>Est. CPU</th>
+                                        <th>Cost %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sortOperatorsTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Joins Analysis -->
+                    <div class="result-section" id="joinsSection">
+                        <h3>Join Analysis</h3>
+                        <div class="joins-list" id="joinsList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Help Modal -->
+        <div class="modal-overlay" id="helpModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Fabric DW Query Performance Analyzer Help</h2>
+                    <button class="btn-icon modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3>What does this tool check?</h3>
+                    <ul>
+                        <li><strong>VARCHAR(8000)</strong> - Inefficient for Delta Parquet storage</li>
+                        <li><strong>Join Type Mismatches</strong> - Implicit conversions in join predicates</li>
+                        <li><strong>Nested Loop Joins</strong> - Row-by-row processing (bad for OLAP)</li>
+                        <li><strong>Many-to-Many Joins</strong> - Data explosion from non-unique keys</li>
+                        <li><strong>Data Movement Operators</strong> - Shuffle operations for data distribution</li>
+                        <li><strong>Missing Statistics</strong> - Tables needing FULLSCAN updates</li>
+                    </ul>
+                    
+                    <h3>Authentication Methods</h3>
+                    <ul>
+                        <li><strong>Azure AD Interactive</strong> - Opens browser for login (recommended)</li>
+                        <li><strong>Azure AD Password</strong> - Username/password for Azure AD</li>
+                        <li><strong>Azure AD Default</strong> - Uses Azure CLI or managed identity</li>
+                    </ul>
+                    
+                    <h3>About Fabric Data Warehouse</h3>
+                    <p>This tool is optimized for Microsoft Fabric DW which uses Delta Parquet storage. 
+                    Traditional SQL Server recommendations (like nonclustered indexes) don't apply.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}?v=20260210L"></script>
+</body>
+</html>

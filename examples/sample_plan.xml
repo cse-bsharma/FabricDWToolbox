@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-16"?>
+<!-- Sample execution plan demonstrating Fabric DW anti-patterns -->
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.6" Build="16.0.1000.6">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT s.SaleID, s.Amount, c.CustomerName, p.ProductName FROM Sales s INNER JOIN Customers c ON CONVERT(varchar(8000), s.CustomerID) = c.CustomerCode INNER JOIN Products p ON s.ProductID = p.ProductID WHERE s.SaleDate >= '2024-01-01' ORDER BY s.Amount DESC" 
+                    StatementId="1" 
+                    StatementCompId="1" 
+                    StatementType="SELECT" 
+                    StatementSubTreeCost="45.6789" 
+                    StatementEstRows="250000"
+                    QueryHash="0xABCDEF1234567890"
+                    QueryPlanHash="0x0987654321FEDCBA">
+          <StatementSetOptions QUOTED_IDENTIFIER="true" ARITHABORT="true" CONCAT_NULL_YIELDS_NULL="true" ANSI_NULLS="true" ANSI_PADDING="true" ANSI_WARNINGS="true" NUMERIC_ROUNDABORT="false"/>
+          <QueryPlan DegreeOfParallelism="8" MemoryGrant="2097152" CachedPlanSize="128" CompileTime="456" CompileCPU="300" CompileMemory="8192">
+            
+            <!-- Root: Sort operation (high cost) -->
+            <RelOp NodeId="0" PhysicalOp="Sort" LogicalOp="Sort" EstimateRows="250000" EstimateCPU="15.5678" EstimateIO="8.2345" EstimatedTotalSubtreeCost="45.6789" Parallel="1">
+              <OutputList>
+                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleID"/>
+                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="Amount"/>
+                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerName"/>
+                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductName"/>
+              </OutputList>
+              <Warnings>
+                <SpillToTempDb SpillLevel="1"/>
+              </Warnings>
+              <Sort Distinct="0">
+                <OrderBy>
+                  <OrderByColumn Ascending="0">
+                    <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="Amount"/>
+                  </OrderByColumn>
+                </OrderBy>
+                
+                <!-- Nested Loops Join - BAD for OLAP! -->
+                <RelOp NodeId="1" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="250000" EstimateCPU="5.6789" EstimateIO="0" EstimatedTotalSubtreeCost="21.8766" Parallel="1">
+                  <OutputList>
+                    <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleID"/>
+                    <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="Amount"/>
+                    <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerName"/>
+                    <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductName"/>
+                  </OutputList>
+                  <NestedLoops Optimized="0">
+                    <OuterReferences>
+                      <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="ProductID"/>
+                    </OuterReferences>
+                    <Predicate>
+                      <ScalarOperator ScalarString="[FabricDW].[dbo].[Sales].[ProductID] as [s].[ProductID]=[FabricDW].[dbo].[Products].[ProductID] as [p].[ProductID]">
+                        <Compare CompareOp="EQ">
+                          <ScalarOperator>
+                            <Identifier>
+                              <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="ProductID"/>
+                            </Identifier>
+                          </ScalarOperator>
+                          <ScalarOperator>
+                            <Identifier>
+                              <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductID"/>
+                            </Identifier>
+                          </ScalarOperator>
+                        </Compare>
+                      </ScalarOperator>
+                    </Predicate>
+                    
+                    <!-- Hash Match with type mismatch - varchar(8000) conversion -->
+                    <RelOp NodeId="2" PhysicalOp="Hash Match" LogicalOp="Inner Join" EstimateRows="500000" EstimateCPU="3.4567" EstimateIO="0.5678" EstimatedTotalSubtreeCost="12.3456" Parallel="1">
+                      <OutputList>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleID"/>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="Amount"/>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="ProductID"/>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerName"/>
+                      </OutputList>
+                      <Warnings>
+                        <PlanAffectingConvert ConvertIssue="Cardinality Estimate" Expression="CONVERT(varchar(8000),[FabricDW].[dbo].[Sales].[CustomerID])"/>
+                      </Warnings>
+                      <Hash>
+                        <DefinedValues/>
+                        <HashKeysBuild>
+                          <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerCode"/>
+                        </HashKeysBuild>
+                        <HashKeysProbe>
+                          <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="CustomerID"/>
+                        </HashKeysProbe>
+                        <ProbeResidual>
+                          <ScalarOperator ScalarString="CONVERT(varchar(8000),[FabricDW].[dbo].[Sales].[CustomerID] as [s].[CustomerID],0)=[FabricDW].[dbo].[Customers].[CustomerCode] as [c].[CustomerCode]">
+                            <Compare CompareOp="EQ">
+                              <ScalarOperator>
+                                <Convert DataType="varchar" Length="8000" Style="0" Implicit="0">
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="CustomerID"/>
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </Convert>
+                              </ScalarOperator>
+                              <ScalarOperator>
+                                <Identifier>
+                                  <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerCode"/>
+                                </Identifier>
+                              </ScalarOperator>
+                            </Compare>
+                          </ScalarOperator>
+                        </ProbeResidual>
+                        
+                        <!-- Build input: Customers table -->
+                        <RelOp NodeId="3" PhysicalOp="Table Scan" LogicalOp="Table Scan" EstimateRows="50000" EstimateCPU="0.0567" EstimateIO="0.8901" EstimatedTotalSubtreeCost="0.9468" Parallel="1">
+                          <OutputList>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerCode"/>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerName"/>
+                          </OutputList>
+                          <TableScan Ordered="0">
+                            <DefinedValues>
+                              <DefinedValue>
+                                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerCode"/>
+                              </DefinedValue>
+                              <DefinedValue>
+                                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]" Column="CustomerName"/>
+                              </DefinedValue>
+                            </DefinedValues>
+                            <Object Database="[FabricDW]" Schema="[dbo]" Table="[Customers]" Alias="[c]"/>
+                          </TableScan>
+                        </RelOp>
+                        
+                        <!-- Probe input: Sales table (large - many-to-many potential) -->
+                        <RelOp NodeId="4" PhysicalOp="Table Scan" LogicalOp="Table Scan" EstimateRows="100000" EstimateCPU="0.1234" EstimateIO="5.6789" EstimatedTotalSubtreeCost="5.8023" Parallel="1">
+                          <OutputList>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleID"/>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="CustomerID"/>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="ProductID"/>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="Amount"/>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleDate"/>
+                          </OutputList>
+                          <TableScan Ordered="0">
+                            <DefinedValues>
+                              <DefinedValue>
+                                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleID"/>
+                              </DefinedValue>
+                              <DefinedValue>
+                                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="CustomerID"/>
+                              </DefinedValue>
+                              <DefinedValue>
+                                <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="ProductID"/>
+                              </DefinedValue>
+                            </DefinedValues>
+                            <Object Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]"/>
+                            <Predicate>
+                              <ScalarOperator ScalarString="[FabricDW].[dbo].[Sales].[SaleDate] as [s].[SaleDate]>='2024-01-01'">
+                                <Compare CompareOp="GE">
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="SaleDate"/>
+                                    </Identifier>
+                                  </ScalarOperator>
+                                  <ScalarOperator>
+                                    <Const ConstValue="'2024-01-01'"/>
+                                  </ScalarOperator>
+                                </Compare>
+                              </ScalarOperator>
+                            </Predicate>
+                          </TableScan>
+                          <Warnings>
+                            <ColumnsWithNoStatistics>
+                              <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Sales]" Column="SaleDate"/>
+                            </ColumnsWithNoStatistics>
+                          </Warnings>
+                        </RelOp>
+                      </Hash>
+                    </RelOp>
+                    
+                    <!-- Products table scan for nested loop -->
+                    <RelOp NodeId="5" PhysicalOp="Table Scan" LogicalOp="Table Scan" EstimateRows="10000" EstimateCPU="0.0123" EstimateIO="0.3456" EstimatedTotalSubtreeCost="0.3579" Parallel="0">
+                      <OutputList>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductID"/>
+                        <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductName"/>
+                      </OutputList>
+                      <TableScan Ordered="0">
+                        <DefinedValues>
+                          <DefinedValue>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductID"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]" Column="ProductName"/>
+                          </DefinedValue>
+                        </DefinedValues>
+                        <Object Database="[FabricDW]" Schema="[dbo]" Table="[Products]" Alias="[p]"/>
+                      </TableScan>
+                    </RelOp>
+                  </NestedLoops>
+                </RelOp>
+              </Sort>
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>

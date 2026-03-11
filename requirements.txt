@@ -1,0 +1,13 @@
+# Fabric Query Tuner - Dependencies
+
+# Database connectivity
+pyodbc>=4.0.39
+
+# Web application
+flask>=3.0.0
+
+# Azure authentication (optional, for service principal auth)
+azure-identity>=1.14.0
+
+# For enhanced XML processing (optional)
+lxml>=4.9.0

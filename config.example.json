@@ -1,0 +1,5 @@
+{
+    "server": "your-workspace.datawarehouse.fabric.microsoft.com",
+    "database": "YourDatabaseName",
+    "authentication": "ActiveDirectoryInteractive"
+}
