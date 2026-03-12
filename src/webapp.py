@@ -473,19 +473,73 @@ def calculate_column_skew(connection, columns_info: list) -> list:
         return []
 
 
+def get_sql_pool_info(connection) -> list:
+    """
+    Query queryinsights.sql_pool_insights for the latest SQL pool configuration.
+    Returns the last 2 records showing pool configuration changes.
+    """
+    try:
+        connection.execute_non_query("SET SHOWPLAN_XML OFF")
+        
+        conn = connection.connect()
+        cursor = conn.cursor()
+        
+        pool_query = """
+        SELECT TOP 2 * 
+        FROM [queryinsights].[sql_pool_insights] 
+        ORDER BY timestamp DESC
+        """
+        
+        cursor.execute(pool_query)
+        
+        # Get column names from cursor description
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        
+        results = []
+        for row in cursor.fetchall():
+            record = {}
+            for i, col in enumerate(columns):
+                val = row[i]
+                # Convert datetime to string for JSON serialization
+                if hasattr(val, 'isoformat'):
+                    record[col] = val.isoformat()
+                elif val is not None:
+                    record[col] = val
+                else:
+                    record[col] = None
+            results.append(record)
+        
+        cursor.close()
+        logger.info(f"Retrieved {len(results)} SQL pool insight records")
+        return results
+    
+    except Exception as e:
+        logger.error(f"Could not get SQL pool info: {e}")
+        logger.error(traceback.format_exc())
+        if 'sql_pool_insights' in str(e).lower() or 'invalid object' in str(e).lower():
+            logger.error("The queryinsights.sql_pool_insights view may not exist or you may not have access.")
+        return []
+
+
 def get_query_history(connection, query_hash: str) -> dict:
     """
     Query queryinsights.exec_requests_history for historical execution data.
     Returns time series data and aggregate statistics for the query hash.
     """
     if not query_hash:
+        logger.warning("No query hash provided - cannot look up history")
         return {'time_series': [], 'aggregates': None}
+    
+    logger.info(f"Looking up query history for hash: {query_hash}")
     
     try:
         connection.execute_non_query("SET SHOWPLAN_XML OFF")
         
         conn = connection.connect()
         cursor = conn.cursor()
+        
+        # Try both the exact hash and lowercase version (Fabric may store differently)
+        query_hash_lower = query_hash.lower() if query_hash else query_hash
         
         # Get time series data for chart (submit_time vs elapsed time) - last 14 days
         time_series_query = f"""
@@ -497,7 +551,7 @@ def get_query_history(connection, query_hash: str) -> dict:
             result_cache_hit,
             row_count
         FROM queryinsights.exec_requests_history
-        WHERE query_hash = '{query_hash}'
+        WHERE query_hash = '{query_hash}' OR query_hash = '{query_hash_lower}'
           AND submit_time >= DATEADD(day, -14, GETDATE())
         ORDER BY submit_time DESC
         """
@@ -534,7 +588,7 @@ def get_query_history(connection, query_hash: str) -> dict:
             MAX(row_count) AS max_row_count,
             AVG(CAST(row_count AS FLOAT)) AS avg_row_count
         FROM queryinsights.exec_requests_history
-        WHERE query_hash = '{query_hash}'
+        WHERE (query_hash = '{query_hash}' OR query_hash = '{query_hash_lower}')
           AND submit_time >= DATEADD(day, -14, GETDATE())
         """
         
@@ -564,11 +618,18 @@ def get_query_history(connection, query_hash: str) -> dict:
             }
         
         cursor.close()
+        
+        if not time_series and not aggregates:
+            logger.warning(f"No query history found for hash {query_hash}. This query may not have been executed yet, only its estimated plan was retrieved.")
+        
         return {'time_series': time_series, 'aggregates': aggregates}
     
     except Exception as e:
         logger.error(f"Could not get query history: {e}")
         logger.error(traceback.format_exc())
+        # Check if this might be a permission or view access issue
+        if 'queryinsights' in str(e).lower() or 'invalid object' in str(e).lower():
+            logger.error("The queryinsights.exec_requests_history view may not exist or you may not have access. Query Insights must be enabled in your Fabric workspace.")
         return {'time_series': [], 'aggregates': None}
 
 
@@ -755,6 +816,9 @@ def analyze_query(server: str, database: str, auth_method: str,
             logger.info(f"Fetching query history for hash: {query_hash}")
             query_history = get_query_history(connection, query_hash)
         
+        # Get SQL pool configuration info
+        sql_pool_info = get_sql_pool_info(connection)
+        
         connection.disconnect()
         
         # Build response
@@ -765,6 +829,8 @@ def analyze_query(server: str, database: str, auth_method: str,
             # Query hash for history lookup
             'query_hash': query_hash,
             'query_history': query_history,
+            # SQL pool configuration info
+            'sql_pool_info': sql_pool_info,
             # Statement info
             'statement_type': plan_info.statement_type,
             'estimated_rows': plan_info.statement_estimated_rows,

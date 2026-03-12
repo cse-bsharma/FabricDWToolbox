@@ -318,6 +318,28 @@ WHERE s.SaleDate >= '2024-01-01'" required></textarea>
                         </div>
                     </div>
 
+                    <!-- SQL Pool Info Section -->
+                    <div class="result-section" id="sqlPoolInfoSection" style="display: none;">
+                        <h3>SQL Pool Configuration</h3>
+                        <div class="stats-table-wrapper">
+                            <table class="data-table" id="sqlPoolInfoTable">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Capacity Units</th>
+                                        <th>Capacity Used</th>
+                                        <th>Active Queries</th>
+                                        <th>Queued Queries</th>
+                                        <th>State</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sqlPoolInfoBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- High-Cost Data Movement Operators -->
                     <div class="result-section" id="highCostSection">
                         <h3>

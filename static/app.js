@@ -239,6 +239,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Query History section
         renderQueryHistory(results);
         
+        // SQL Pool Info section
+        renderSqlPoolInfo(results);
+        
         // Statistics info
         const statsSection = document.getElementById('statisticsSection');
         const statsBody = document.getElementById('statisticsTableBody');
@@ -677,5 +680,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+    }
+    
+    function renderSqlPoolInfo(results) {
+        const section = document.getElementById('sqlPoolInfoSection');
+        const tableBody = document.getElementById('sqlPoolInfoBody');
+        
+        // Hide section if no data or XML-only mode
+        if (results.is_xml_only || !results.sql_pool_info || results.sql_pool_info.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        
+        section.style.display = 'block';
+        const poolInfo = results.sql_pool_info;
+        
+        // Build table rows from the pool info records
+        let rows = '';
+        poolInfo.forEach((record, index) => {
+            // Format timestamp
+            let timestamp = '-';
+            if (record.timestamp) {
+                try {
+                    const d = new Date(record.timestamp);
+                    timestamp = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+                } catch (e) {
+                    timestamp = record.timestamp;
+                }
+            }
+            
+            // Extract key metrics - adjust based on actual columns returned
+            const capacity = record.capacity_units || record.allocated_capacity_units || '-';
+            const activeQueries = record.active_queries ?? record.active_query_count ?? '-';
+            const queuedQueries = record.queued_queries ?? record.queued_query_count ?? '-';
+            const capacityUsed = record.capacity_used_percent ?? record.capacity_utilization_percent ?? '-';
+            const state = record.state || record.pool_state || '-';
+            
+            rows += `
+                <tr>
+                    <td>${timestamp}</td>
+                    <td>${capacity}</td>
+                    <td>${typeof capacityUsed === 'number' ? capacityUsed.toFixed(1) + '%' : capacityUsed}</td>
+                    <td>${activeQueries}</td>
+                    <td>${queuedQueries}</td>
+                    <td><span class="badge ${state === 'Online' || state === 'ONLINE' ? 'badge-success' : 'badge-warning'}">${state}</span></td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = rows;
     }
 });

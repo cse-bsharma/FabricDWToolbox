@@ -693,6 +693,30 @@ select {
 .severity-badge.MEDIUM { background: rgba(210, 153, 34, 0.2); color: var(--color-medium); }
 .severity-badge.LOW { background: rgba(63, 185, 80, 0.2); color: var(--color-low); }
 
+/* Generic badges */
+.badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success { 
+    background: rgba(63, 185, 80, 0.2); 
+    color: var(--color-low); 
+}
+
+.badge-warning { 
+    background: rgba(210, 153, 34, 0.2); 
+    color: var(--color-medium); 
+}
+
+.badge-danger { 
+    background: rgba(248, 81, 73, 0.2); 
+    color: var(--color-critical); 
+}
+
 .recommendation-title {
     flex: 1;
     font-weight: 500;
