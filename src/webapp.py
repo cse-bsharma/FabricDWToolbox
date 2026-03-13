@@ -478,11 +478,10 @@ def get_sql_pool_info(connection) -> list:
     Query queryinsights.sql_pool_insights for the latest SQL pool configuration.
     Returns the last 2 records showing pool configuration changes.
     """
+    logger.info("Starting get_sql_pool_info function")
     try:
+        logger.info("Attempting to query sql_pool_insights view")
         connection.execute_non_query("SET SHOWPLAN_XML OFF")
-        
-        conn = connection.connect()
-        cursor = conn.cursor()
         
         pool_query = """
         SELECT TOP 2 * 
@@ -490,28 +489,27 @@ def get_sql_pool_info(connection) -> list:
         ORDER BY timestamp DESC
         """
         
-        cursor.execute(pool_query)
+        # Use connection.execute_query() which handles cursor internally
+        results = connection.execute_query(pool_query)
         
-        # Get column names from cursor description
-        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        # Log the raw results for debugging
+        logger.info(f"Raw SQL pool results: {results}")
         
-        results = []
-        for row in cursor.fetchall():
-            record = {}
-            for i, col in enumerate(columns):
-                val = row[i]
-                # Convert datetime to string for JSON serialization
+        # Convert datetime values to string for JSON serialization
+        serialized_results = []
+        for record in results:
+            serialized_record = {}
+            for key, val in record.items():
                 if hasattr(val, 'isoformat'):
-                    record[col] = val.isoformat()
+                    serialized_record[key] = val.isoformat()
                 elif val is not None:
-                    record[col] = val
+                    serialized_record[key] = val
                 else:
-                    record[col] = None
-            results.append(record)
+                    serialized_record[key] = None
+            serialized_results.append(serialized_record)
         
-        cursor.close()
-        logger.info(f"Retrieved {len(results)} SQL pool insight records")
-        return results
+        logger.info(f"Retrieved {len(serialized_results)} SQL pool insight records")
+        return serialized_results
     
     except Exception as e:
         logger.error(f"Could not get SQL pool info: {e}")
@@ -541,7 +539,7 @@ def get_query_history(connection, query_hash: str) -> dict:
         # Try both the exact hash and lowercase version (Fabric may store differently)
         query_hash_lower = query_hash.lower() if query_hash else query_hash
         
-        # Get time series data for chart (submit_time vs elapsed time) - last 14 days
+        # Get time series data for chart (submit_time vs elapsed time) - last 30 days
         time_series_query = f"""
         SELECT 
             submit_time,
@@ -552,7 +550,7 @@ def get_query_history(connection, query_hash: str) -> dict:
             row_count
         FROM queryinsights.exec_requests_history
         WHERE query_hash = '{query_hash}' OR query_hash = '{query_hash_lower}'
-          AND submit_time >= DATEADD(day, -14, GETDATE())
+          AND submit_time >= DATEADD(day, -30, GETDATE())
         ORDER BY submit_time DESC
         """
         
@@ -570,7 +568,7 @@ def get_query_history(connection, query_hash: str) -> dict:
         
         logger.info(f"Found {len(time_series)} historical executions for query hash {query_hash}")
         
-        # Get aggregate statistics - last 14 days
+        # Get aggregate statistics - last 30 days
         aggregates_query = f"""
         SELECT
             COUNT(*) AS execution_count,
@@ -589,7 +587,7 @@ def get_query_history(connection, query_hash: str) -> dict:
             AVG(CAST(row_count AS FLOAT)) AS avg_row_count
         FROM queryinsights.exec_requests_history
         WHERE (query_hash = '{query_hash}' OR query_hash = '{query_hash_lower}')
-          AND submit_time >= DATEADD(day, -14, GETDATE())
+          AND submit_time >= DATEADD(day, -30, GETDATE())
         """
         
         cursor.execute(aggregates_query)

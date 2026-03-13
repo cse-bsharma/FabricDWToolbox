@@ -709,21 +709,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // Extract key metrics - adjust based on actual columns returned
-            const capacity = record.capacity_units || record.allocated_capacity_units || '-';
-            const activeQueries = record.active_queries ?? record.active_query_count ?? '-';
-            const queuedQueries = record.queued_queries ?? record.queued_query_count ?? '-';
-            const capacityUsed = record.capacity_used_percent ?? record.capacity_utilization_percent ?? '-';
-            const state = record.state || record.pool_state || '-';
+            // Extract key metrics based on actual sql_pool_insights columns
+            const poolName = record.sql_pool_name || '-';
+            const maxResourcePct = record.max_resource_percentage ?? '-';
+            const optimizedForReads = record.is_optimized_for_reads;
+            const workspaceCapacity = record.current_workspace_capacity || '-';
+            const underPressure = record.is_pool_under_pressure;
             
             rows += `
                 <tr>
+                    <td>${poolName}</td>
                     <td>${timestamp}</td>
-                    <td>${capacity}</td>
-                    <td>${typeof capacityUsed === 'number' ? capacityUsed.toFixed(1) + '%' : capacityUsed}</td>
-                    <td>${activeQueries}</td>
-                    <td>${queuedQueries}</td>
-                    <td><span class="badge ${state === 'Online' || state === 'ONLINE' ? 'badge-success' : 'badge-warning'}">${state}</span></td>
+                    <td>${typeof maxResourcePct === 'number' ? maxResourcePct + '%' : maxResourcePct}</td>
+                    <td><span class="badge ${optimizedForReads === 1 ? 'badge-success' : 'badge-warning'}">${optimizedForReads === 1 ? 'Yes' : 'No'}</span></td>
+                    <td>${workspaceCapacity}</td>
+                    <td><span class="badge ${underPressure === 0 ? 'badge-success' : 'badge-danger'}">${underPressure === 0 ? 'No' : 'Yes'}</span></td>
                 </tr>
             `;
         });
