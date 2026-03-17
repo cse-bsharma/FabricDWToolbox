@@ -1,41 +1,39 @@
 -- Example query for testing the Fabric Query Tuner
 -- This query has several potential performance issues for demonstration
 
--- Example 1: Simple query that might benefit from an index
-SELECT 
-    o.OrderID,
-    o.OrderDate,
-    o.CustomerID,
-    c.CustomerName,
-    c.Email,
-    o.TotalAmount
-FROM Orders o
-INNER JOIN Customers c ON o.CustomerID = c.CustomerID
-WHERE o.OrderDate >= DATEADD(month, -3, GETDATE())
-    AND o.Status = 'Completed'
-ORDER BY o.OrderDate DESC;
-
--- Example 2: Query with potential table scan
-/*
-SELECT *
-FROM LargeTransactionLog
-WHERE YEAR(TransactionDate) = 2024
-    AND TransactionType = 'SALE';
-*/
-
--- Example 3: Query with multiple joins
-/*
-SELECT 
-    p.ProductName,
-    c.CategoryName,
-    SUM(oi.Quantity) as TotalSold,
-    SUM(oi.Quantity * oi.UnitPrice) as Revenue
-FROM OrderItems oi
-INNER JOIN Products p ON oi.ProductID = p.ProductID
-INNER JOIN Categories c ON p.CategoryID = c.CategoryID
-INNER JOIN Orders o ON oi.OrderID = o.OrderID
-WHERE o.OrderDate >= '2024-01-01'
-GROUP BY p.ProductName, c.CategoryName
-HAVING SUM(oi.Quantity) > 100
-ORDER BY Revenue DESC;
-*/
+select supp_nation
+	,cust_nation
+	,l_year
+	,sum(volume) as revenue
+from (
+	select n1.n_name as supp_nation
+		,n2.n_name as cust_nation
+		,datepart(yy, l_shipdate) as l_year
+		,l_extendedprice * (1 - l_discount) as volume
+	from dbo.supplier
+		,dbo.lineitem
+		,dbo.orders
+		,dbo.customer
+		,dbo.nation n1
+		,dbo.nation n2
+	where s_suppkey = l_suppkey
+		and o_orderkey = l_orderkey
+		and c_custkey = o_custkey
+		and s_nationkey = n1.n_nationkey
+		and c_nationkey = n2.n_nationkey
+		and (
+			(
+				n1.n_name = 'FRANCE'
+				and n2.n_name = 'GERMANY'
+				)
+			or (
+				n1.n_name = 'GERMANY'
+				and n2.n_name = 'FRANCE'
+				)
+			)
+		and l_shipdate between '1995-01-01'
+			and '1996-12-31'
+	) as shipping
+group by supp_nation
+	,cust_nation
+	,l_year --OPTION ( USE HINT ('DISABLE_RESULT_SET_CACHE') )
